@@ -5,14 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Televendas Fast</title>
   
-  <!-- Configurações PWA -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#ffffff">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
 
-  <!-- jsPDF para Geração Direta de PDFs Offline -->
+  <!-- jsPDF para Geração de PDFs -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- PDF.js para Leitura e Extração de Texto de PDFs -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
   <style>
     :root {
@@ -75,7 +76,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
 
     .brand-title {
@@ -100,6 +101,27 @@
       font-size: 14px;
       font-weight: 600;
       cursor: pointer;
+    }
+
+    /* Linha do Botão Importar Pedido */
+    .import-row {
+      margin-bottom: 10px;
+    }
+
+    .btn-import-order {
+      width: 100%;
+      background: var(--primary-light);
+      border: 1px dashed var(--primary);
+      color: var(--primary);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
 
     .search-filter-row {
@@ -318,7 +340,6 @@
       color: var(--success);
     }
 
-    /* Modais Bottom Sheet */
     .modal-overlay {
       display: none;
       position: fixed;
@@ -551,6 +572,14 @@
         <div class="brand-title">Televendas <span>Fast</span></div>
         <button class="btn-new-order" id="btnOpenNewOrder">+ Novo</button>
       </div>
+
+      <!-- Botão Importar Pedido Padronizado -->
+      <div class="import-row">
+        <input type="file" id="fileImportInput" accept="application/pdf,image/png,image/jpeg" style="display: none;">
+        <button type="button" class="btn-import-order" id="btnTriggerImport">
+          📥 Importar Pedido (PDF / Imagem)
+        </button>
+      </div>
       
       <div class="search-filter-row">
         <div class="search-box">
@@ -574,7 +603,7 @@
     </header>
 
     <main id="ordersList">
-      <div class="empty-state">Nenhum pedido registrado. Toque em "+ Novo" para começar.</div>
+      <div class="empty-state">Nenhum pedido registrado. Toque em "+ Novo" ou importe um arquivo.</div>
     </main>
   </div>
 
@@ -589,7 +618,6 @@
         </div>
       </div>
 
-      <!-- Barra de Navegação por Etapas -->
       <div style="padding: 12px 20px; border-bottom: 1px solid var(--border); background: var(--surface-subtle);">
         <div class="card-timeline" id="modalTimeline">
           <div class="tl-step" id="stepNode1" style="cursor: pointer;">
@@ -609,7 +637,7 @@
 
       <div class="sheet-body">
         
-        <!-- ETAPA 1: REGISTRO DE PEDIDO E PRODUTOS -->
+        <!-- ETAPA 1 -->
         <div id="viewStep1">
           <div class="form-group">
             <label>Cliente</label>
@@ -628,11 +656,10 @@
           <div id="productsContainer"></div>
         </div>
 
-        <!-- ETAPA 2: SEPARAÇÃO E LOCALIZAÇÃO DE PALETES -->
+        <!-- ETAPA 2 -->
         <div id="viewStep2" style="display: none;">
           <div id="separationItemsList"></div>
 
-          <!-- Caixa de Adição de Palete -->
           <div class="pallet-box" id="palletBoxForm" style="display: none;">
             <div style="font-size: 13px; font-weight: 700; margin-bottom: 8px;" id="palletTargetItemName">Adicionar Palete</div>
             
@@ -695,7 +722,7 @@
           </div>
         </div>
 
-        <!-- ETAPA 3: CONFERÊNCIA E STATUS FINAL -->
+        <!-- ETAPA 3 -->
         <div id="viewStep3" style="display: none;">
           <div style="font-size: 14px; font-weight: 700; margin-bottom: 12px;">Resumo da Auditoria</div>
           <div id="auditStatusResult"></div>
@@ -729,12 +756,134 @@
     const btnCloseModal = document.getElementById("btnCloseModal");
     const btnDownloadOrderPdf = document.getElementById("btnDownloadOrderPdf");
 
+    // Inputs de Importação
+    const btnTriggerImport = document.getElementById("btnTriggerImport");
+    const fileImportInput = document.getElementById("fileImportInput");
+
+    // Configuração do Worker do PDF.js
+    if (window.pdfjsLib) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    }
+
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('sw.js').catch(() => {});
       });
     }
 
+    // ==========================================
+    // MÓDULO DE IMPORTAÇÃO E VALIDAÇÃO DE DOCUMENTO
+    // ==========================================
+    btnTriggerImport.addEventListener("click", () => {
+      fileImportInput.value = "";
+      fileImportInput.click();
+    });
+
+    fileImportInput.addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      btnTriggerImport.textContent = "⏳ Analisando documento...";
+      btnTriggerImport.disabled = true;
+
+      try {
+        if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
+          await processPdfImport(file);
+        } else {
+          alert("Para garantir a conferência exata dos dados sem erros de leitura no smartphone, envie o arquivo .PDF original gerado pelo aplicativo.");
+        }
+      } catch (err) {
+        alert("Erro ao processar o arquivo: " + err.message);
+      } finally {
+        btnTriggerImport.textContent = "📥 Importar Pedido (PDF / Imagem)";
+        btnTriggerImport.disabled = false;
+      }
+    });
+
+    async function processPdfImport(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let fullText = "";
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map(item => item.str).join(" ");
+        fullText += pageText + "\n";
+      }
+
+      // Validação de Integridade: termos obrigatórios do cabeçalho
+      if (!fullText.includes("TELEVENDAS FAST") || !fullText.includes("RELATÓRIO DO PEDIDO")) {
+        alert("Documento Inválido! O arquivo selecionado não é um pedido oficial do Televendas Fast.");
+        return;
+      }
+
+      // Extração de Cliente
+      let client = "Cliente Importado";
+      const clientMatch = fullText.match(/Cliente:\s*(.*?)(?=\s*Data de Retirada:|$)/i);
+      if (clientMatch && clientMatch[1]) {
+        client = clientMatch[1].trim();
+      }
+
+      // Extração de Data
+      let pickupDate = "";
+      const dateMatch = fullText.match(/Data de Retirada:\s*(\d{2})\/(\d{2})\/(\d{4})/i);
+      if (dateMatch) {
+        pickupDate = `${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}`;
+      }
+
+      // Extração dos Itens e Quantidades
+      // Padrão gerado: "1. Arroz (Tipo 1) Solicitado: 10 Fardo(s)"
+      const items = [];
+      const itemRegex = /\d+\.\s+([^(]+?)(?:\s*\((.*?)\))?\s+Solicitado:\s*(\d+)\s*(Fardo|Unidade)/gi;
+      let match;
+
+      while ((match = itemRegex.exec(fullText)) !== null) {
+        items.push({
+          name: match[1].trim(),
+          variation: match[2] ? match[2].trim() : "",
+          quantity: Number(match[3]),
+          packageType: match[4] === "Unidade" ? "Unidade" : "Fardo",
+          pallets: [] // Começa pendente para a Etapa 2 de separação
+        });
+      }
+
+      if (items.length === 0) {
+        // Fallback para itens sem variação ou layout ligeiramente condensado
+        const simpleRegex = /\d+\.\s+(.+?)\s+Solicitado:\s*(\d+)\s*(Fardo|Unidade)/gi;
+        while ((match = simpleRegex.exec(fullText)) !== null) {
+          items.push({
+            name: match[1].trim(),
+            variation: "",
+            quantity: Number(match[2]),
+            packageType: match[3] === "Unidade" ? "Unidade" : "Fardo",
+            pallets: []
+          });
+        }
+      }
+
+      if (items.length === 0) {
+        alert("Documento Inválido: Não foi possível identificar a lista de produtos deste pedido.");
+        return;
+      }
+
+      // Criação do Pedido na Memória e Armazenamento
+      const newOrder = {
+        id: "ord_" + Date.now(),
+        client,
+        pickupDate,
+        items,
+        currentStep: 1 // Inicia na Etapa 1 pendente para a separação
+      };
+
+      orders.unshift(newOrder);
+      localStorage.setItem(StorageKey, JSON.stringify(orders));
+      renderOrders();
+
+      alert(`Pedido de "${client}" importado com sucesso! Ele está disponível na tela inicial para iniciar a separação.`);
+    }
+
+    // Filtros
     btnFilterTrigger.addEventListener("click", (e) => {
       e.stopPropagation();
       filterDropdown.classList.toggle("active");
@@ -909,11 +1058,11 @@
           ${items.length > 1 ? `<button type="button" class="btn-remove-item" onclick="removeProductRow(${index})">Remover</button>` : ""}
           <div class="form-group" style="margin-bottom: 8px;">
             <label>Produto</label>
-            <input type="text" class="inp-prod-name" value="${item.name || ''}" placeholder="Ex: Leite Integral">
+            <input type="text" class="inp-prod-name" value="${item.name || ''}" placeholder="Ex: Arroz 5kg">
           </div>
           <div class="form-group" style="margin-bottom: 8px;">
             <label>Variação (Opcional)</label>
-            <input type="text" class="inp-prod-var" value="${item.variation || ''}" placeholder="Ex: Caixa 12x1L">
+            <input type="text" class="inp-prod-var" value="${item.variation || ''}" placeholder="Ex: Tipo 1 / Pacote">
           </div>
           <div class="form-row">
             <div class="form-group" style="flex: 1; margin-bottom: 0;">
@@ -1173,21 +1322,16 @@
       }
     });
 
-    // ==========================================
-    // MÓDULO DE GERAÇÃO DE PDFS (jsPDF)
-    // ==========================================
-
-    // 1. PDF Individual por Palete (Etiqueta Operacional de Separação)
+    // 1. PDF Individual por Palete
     window.downloadSinglePalletPdf = function(itemIdx, palletIdx) {
       const { jsPDF } = window.jspdf;
       const ord = getCurrentOrderObject();
       const item = ord.items[itemIdx];
       const pal = item.pallets[palletIdx];
 
-      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [100, 150] }); // Formato etiqueta 10x15cm
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [100, 150] });
 
-      // Cabeçalho
-      doc.setFillColor(234, 88, 12); // Laranja avermelhado
+      doc.setFillColor(234, 88, 12);
       doc.rect(0, 0, 100, 22, "F");
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(14);
@@ -1197,7 +1341,6 @@
       doc.setFont("helvetica", "normal");
       doc.text("FICHA DE SEPARAÇÃO DE PALETE", 50, 17, { align: "center" });
 
-      // Dados do Pedido
       doc.setTextColor(15, 23, 42);
       doc.setFontSize(10);
       doc.setFont("helvetica", "bold");
@@ -1211,11 +1354,9 @@
       const dataFmt = ord.pickupDate ? ord.pickupDate.split("-").reverse().join("/") : "--/--/----";
       doc.text(dataFmt, 27, 40);
 
-      // Linha Divisória
       doc.setDrawColor(226, 232, 240);
       doc.line(8, 46, 92, 46);
 
-      // Produto e Quantidade do Palete
       doc.setFontSize(12);
       doc.setFont("helvetica", "bold");
       doc.text(String(item.name || "Produto").toUpperCase(), 50, 56, { align: "center" });
@@ -1227,7 +1368,6 @@
         doc.text(`Var: ${item.variation}`, 50, 62, { align: "center" });
       }
 
-      // Caixa Destacada de Quantidade
       doc.setFillColor(241, 245, 249);
       doc.roundedRect(10, 68, 80, 24, 3, 3, "F");
       doc.setTextColor(234, 88, 12);
@@ -1238,7 +1378,6 @@
       doc.setTextColor(100, 116, 139);
       doc.text(`Total solicitado no pedido: ${item.quantity} ${item.packageType}(s)`, 50, 87, { align: "center" });
 
-      // Localização e Prateleira
       doc.setTextColor(15, 23, 42);
       doc.setFontSize(11);
       doc.setFont("helvetica", "bold");
@@ -1255,7 +1394,6 @@
       doc.setFont("helvetica", "normal");
       doc.text(pal.shelf, 35, 124);
 
-      // Rodapé da Ficha
       doc.setFontSize(7);
       doc.setTextColor(148, 163, 184);
       doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, 50, 142, { align: "center" });
@@ -1272,7 +1410,6 @@
 
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-      // Topo
       doc.setFillColor(234, 88, 12);
       doc.rect(0, 0, 210, 24, "F");
       doc.setTextColor(255, 255, 255);
@@ -1280,7 +1417,6 @@
       doc.setFont("helvetica", "bold");
       doc.text("TELEVENDAS FAST - RELATÓRIO DO PEDIDO", 105, 15, { align: "center" });
 
-      // Dados do Pedido
       doc.setTextColor(15, 23, 42);
       doc.setFontSize(11);
       doc.setFont("helvetica", "bold");
@@ -1308,7 +1444,6 @@
       doc.setDrawColor(226, 232, 240);
       doc.line(14, 56, 196, 56);
 
-      // Tabela de Produtos e Paletes
       let currentY = 66;
       doc.setTextColor(15, 23, 42);
       doc.setFontSize(12);
