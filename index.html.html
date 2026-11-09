@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Televendas Fast</title>
+  
+  <!-- Configurações PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+
+  <!-- jsPDF para Geração Direta de PDFs Offline -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    :root {
+      --bg-page: #f8fafc;
+      --surface: #ffffff;
+      --surface-subtle: #f1f5f9;
+      --border: #e2e8f0;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --primary: #ea580c;
+      --primary-hover: #c2410c;
+      --primary-light: #fff7ed;
+      --danger: #dc2626;
+      --danger-light: #fef2f2;
+      --warning: #d97706;
+      --warning-light: #fffbeb;
+      --success: #16a34a;
+      --success-light: #f0fdf4;
+      --radius: 14px;
+      --safe-bottom: env(safe-area-inset-bottom, 16px);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      display: flex;
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    .app-viewport {
+      width: 100%;
+      max-width: 440px;
+      background: var(--surface);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 0 25px rgba(0,0,0,0.04);
+      position: relative;
+    }
+
+    header {
+      padding: 16px 20px 12px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .brand-title {
+      font-size: 19px;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .brand-title span {
+      color: var(--primary);
+    }
+
+    .btn-new-order {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 99px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .search-filter-row {
+      display: flex;
+      gap: 8px;
+      position: relative;
+    }
+
+    .search-box {
+      flex: 1;
+      position: relative;
+    }
+
+    .search-input {
+      width: 100%;
+      background: var(--surface-subtle);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 12px 9px 34px;
+      font-size: 14px;
+      color: var(--text-main);
+      outline: none;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    .btn-filter-trigger {
+      background: var(--surface-subtle);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      border-radius: 10px;
+      padding: 0 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .filter-dropdown {
+      display: none;
+      position: absolute;
+      right: 0;
+      top: calc(100% + 6px);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+      width: 220px;
+      z-index: 30;
+      padding: 6px;
+    }
+
+    .filter-dropdown.active {
+      display: block;
+    }
+
+    .filter-item {
+      padding: 9px 12px;
+      font-size: 13px;
+      color: var(--text-main);
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .filter-item:hover, .filter-item.active {
+      background: var(--surface-subtle);
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    main {
+      flex: 1;
+      padding: 16px 20px calc(var(--safe-bottom) + 32px);
+      overflow-y: auto;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    .order-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+      cursor: pointer;
+      transition: border-color 0.15s ease;
+    }
+
+    .order-card:active {
+      border-color: var(--primary);
+    }
+
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 10px;
+    }
+
+    .card-client {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .card-date {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .card-timeline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 12px 0;
+      position: relative;
+    }
+
+    .card-timeline::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 12px;
+      right: 12px;
+      height: 2px;
+      background: var(--border);
+      z-index: 1;
+      transform: translateY(-50%);
+    }
+
+    .tl-step {
+      position: relative;
+      z-index: 2;
+      background: var(--surface);
+      padding: 0 4px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .tl-node {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--surface-subtle);
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+    }
+
+    .tl-step.completed .tl-node {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }
+
+    .tl-step.current .tl-node {
+      background: #fff;
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .tl-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-top: 6px;
+      width: 100%;
+    }
+
+    .status-badge.danger {
+      background: var(--danger-light);
+      color: var(--danger);
+    }
+
+    .status-badge.warning {
+      background: var(--warning-light);
+      color: var(--warning);
+    }
+
+    .status-badge.success {
+      background: var(--success-light);
+      color: var(--success);
+    }
+
+    /* Modais Bottom Sheet */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.4);
+      z-index: 100;
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal-sheet {
+      background: var(--surface);
+      width: 100%;
+      max-width: 440px;
+      max-height: 92vh;
+      border-radius: 20px 20px 0 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      animation: slideUp 0.2s cubic-bezier(0, 0, 0.2, 1);
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+
+    .sheet-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .sheet-title {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .sheet-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn-download-pdf-order {
+      background: var(--primary-light);
+      color: var(--primary);
+      border: 1px solid var(--primary);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .btn-close-sheet {
+      background: none;
+      border: none;
+      font-size: 20px;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+
+    .sheet-body {
+      padding: 16px 20px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .sheet-footer {
+      padding: 12px 20px calc(var(--safe-bottom) + 12px);
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      display: flex;
+      gap: 10px;
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    input, select {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+      color: var(--text-main);
+      outline: none;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--primary);
+    }
+
+    .form-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn-submit {
+      flex: 1;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 12px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .btn-secondary {
+      background: var(--surface-subtle);
+      color: var(--text-main);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .btn-delete {
+      background: var(--danger-light);
+      color: var(--danger);
+      border: none;
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .item-card-edit {
+      background: var(--surface-subtle);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 10px;
+      position: relative;
+    }
+
+    .btn-remove-item {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: none;
+      border: none;
+      color: var(--danger);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .pallet-box {
+      background: var(--surface-subtle);
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      margin-top: 12px;
+    }
+
+    .pallet-tag {
+      background: #fff;
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 6px;
+      gap: 8px;
+    }
+
+    .pallet-tag-info {
+      flex: 1;
+    }
+
+    .pallet-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-pdf-mini {
+      background: var(--surface-subtle);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--primary);
+      cursor: pointer;
+    }
+
+    .btn-del-tag {
+      background: none;
+      border: none;
+      color: var(--danger);
+      font-size: 14px;
+      cursor: pointer;
+      padding: 2px 6px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-viewport">
+    <header>
+      <div class="header-top">
+        <div class="brand-title">Televendas <span>Fast</span></div>
+        <button class="btn-new-order" id="btnOpenNewOrder">+ Novo</button>
+      </div>
+      
+      <div class="search-filter-row">
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="searchInput" class="search-input" placeholder="Buscar cliente ou produto...">
+        </div>
+        
+        <button class="btn-filter-trigger" id="btnFilterTrigger">
+          <span>Filtro</span> ▼
+        </button>
+
+        <div class="filter-dropdown" id="filterDropdown">
+          <div class="filter-item active" data-filter="all">Todos os Pedidos</div>
+          <div class="filter-item" data-filter="step1">1. Em Andamento</div>
+          <div class="filter-item" data-filter="step2">2. Para Separar</div>
+          <div class="filter-item" data-filter="deficit">Falta Quantidade</div>
+          <div class="filter-item" data-filter="excess">Qtd Excessiva</div>
+          <div class="filter-item" data-filter="step3">3. Aprovados / Liberados</div>
+        </div>
+      </div>
+    </header>
+
+    <main id="ordersList">
+      <div class="empty-state">Nenhum pedido registrado. Toque em "+ Novo" para começar.</div>
+    </main>
+  </div>
+
+  <!-- Modal / Gerenciador Unificado de Pedido -->
+  <div class="modal-overlay" id="orderModal">
+    <div class="modal-sheet">
+      <div class="sheet-header">
+        <div class="sheet-title" id="modalTitle">Pedido</div>
+        <div class="sheet-actions">
+          <button type="button" class="btn-download-pdf-order" id="btnDownloadOrderPdf" style="display: none;" title="Baixar PDF Geral">📄 Baixar Pedido</button>
+          <button class="btn-close-sheet" id="btnCloseModal">✕</button>
+        </div>
+      </div>
+
+      <!-- Barra de Navegação por Etapas -->
+      <div style="padding: 12px 20px; border-bottom: 1px solid var(--border); background: var(--surface-subtle);">
+        <div class="card-timeline" id="modalTimeline">
+          <div class="tl-step" id="stepNode1" style="cursor: pointer;">
+            <div class="tl-node">1</div>
+            <div class="tl-label">Registro</div>
+          </div>
+          <div class="tl-step" id="stepNode2" style="cursor: pointer;">
+            <div class="tl-node">2</div>
+            <div class="tl-label">Separação</div>
+          </div>
+          <div class="tl-step" id="stepNode3" style="cursor: pointer;">
+            <div class="tl-node">3</div>
+            <div class="tl-label">Conferência</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sheet-body">
+        
+        <!-- ETAPA 1: REGISTRO DE PEDIDO E PRODUTOS -->
+        <div id="viewStep1">
+          <div class="form-group">
+            <label>Cliente</label>
+            <input type="text" id="orderClient" placeholder="Nome do cliente ou razão social">
+          </div>
+          <div class="form-group">
+            <label>Dia a ser retirado</label>
+            <input type="date" id="orderDate">
+          </div>
+
+          <div style="margin: 20px 0 10px; display: flex; justify-content: space-between; align-items: center;">
+            <label style="margin:0;">Produtos Solicitados</label>
+            <button type="button" id="btnAddProductRow" style="background: none; border: none; color: var(--primary); font-size: 13px; font-weight: 600; cursor: pointer;">+ Adicionar Produto</button>
+          </div>
+
+          <div id="productsContainer"></div>
+        </div>
+
+        <!-- ETAPA 2: SEPARAÇÃO E LOCALIZAÇÃO DE PALETES -->
+        <div id="viewStep2" style="display: none;">
+          <div id="separationItemsList"></div>
+
+          <!-- Caixa de Adição de Palete -->
+          <div class="pallet-box" id="palletBoxForm" style="display: none;">
+            <div style="font-size: 13px; font-weight: 700; margin-bottom: 8px;" id="palletTargetItemName">Adicionar Palete</div>
+            
+            <div class="form-group">
+              <label>Posição na Prateleira</label>
+              <select id="palShelf">
+                <option value="" disabled selected>Selecione a posição</option>
+                <option value="Caixaria">Caixaria</option>
+                <option value="Prancha">Prancha</option>
+                <option value="Gaveta">Gaveta</option>
+                <option value="Sub-aéreo">Sub-aéreo</option>
+                <option value="Aéreo">Aéreo</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Localização</label>
+              <select id="palLocation">
+                <option value="" disabled selected>Selecione a localização</option>
+                <option value="Corredor 1">Corredor 1</option>
+                <option value="Corredor 2">Corredor 2</option>
+                <option value="Corredor 3">Corredor 3</option>
+                <option value="Corredor 4">Corredor 4</option>
+                <option value="Corredor 5">Corredor 5</option>
+                <option value="Corredor 6">Corredor 6</option>
+                <option value="Corredor 7">Corredor 7</option>
+                <option value="Corredor 8">Corredor 8</option>
+                <option value="Corredor 9">Corredor 9</option>
+                <option value="Corredor 10">Corredor 10</option>
+                <option value="Corredor 11">Corredor 11</option>
+                <option value="Corredor 12">Corredor 12</option>
+                <option value="Corredor 13">Corredor 13</option>
+                <option value="Corredor 14">Corredor 14</option>
+                <option value="Corredor 15">Corredor 15</option>
+                <option value="Depósito">Depósito</option>
+                <option value="Doca">Doca</option>
+                <option value="Televendas">Televendas</option>
+                <option value="Alto Giro">Alto Giro</option>
+                <option value="Extremidade Superior Loja">Extremidade Superior Loja</option>
+                <option value="Extremidade Inferior Loja">Extremidade Inferior Loja</option>
+              </select>
+            </div>
+
+            <div class="form-group" id="groupExtraCondition" style="display: none;">
+              <label id="labelExtraCondition">Condição</label>
+              <select id="palExtraCondition">
+                <option value="" disabled selected>Selecione a condição</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Quantidade Separada</label>
+              <input type="number" id="palQty" placeholder="Digite a quantidade...">
+            </div>
+
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="btn-submit" id="btnConfirmAddPallet">Confirmar Palete</button>
+              <button type="button" class="btn-secondary" id="btnCancelPallet">Cancelar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ETAPA 3: CONFERÊNCIA E STATUS FINAL -->
+        <div id="viewStep3" style="display: none;">
+          <div style="font-size: 14px; font-weight: 700; margin-bottom: 12px;">Resumo da Auditoria</div>
+          <div id="auditStatusResult"></div>
+          <div id="auditItemsBreakdown" style="margin-top: 14px;"></div>
+        </div>
+
+      </div>
+
+      <div class="sheet-footer">
+        <button type="button" class="btn-delete" id="btnDeleteCurrentOrder" style="display: none;">Excluir</button>
+        <button type="button" class="btn-secondary" id="btnFooterPrev">Voltar</button>
+        <button type="button" class="btn-submit" id="btnFooterNext">Avançar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const StorageKey = "televendas_fast_orders";
+    let orders = JSON.parse(localStorage.getItem(StorageKey) || "[]");
+    let activeFilter = "all";
+    let currentEditingOrderId = null;
+    let currentStep = 1;
+    let selectedItemIndexForPallet = null;
+
+    const ordersList = document.getElementById("ordersList");
+    const searchInput = document.getElementById("searchInput");
+    const btnFilterTrigger = document.getElementById("btnFilterTrigger");
+    const filterDropdown = document.getElementById("filterDropdown");
+    const orderModal = document.getElementById("orderModal");
+    const btnOpenNewOrder = document.getElementById("btnOpenNewOrder");
+    const btnCloseModal = document.getElementById("btnCloseModal");
+    const btnDownloadOrderPdf = document.getElementById("btnDownloadOrderPdf");
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      });
+    }
+
+    btnFilterTrigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      filterDropdown.classList.toggle("active");
+    });
+
+    document.addEventListener("click", () => {
+      filterDropdown.classList.remove("active");
+    });
+
+    document.querySelectorAll(".filter-item").forEach(item => {
+      item.addEventListener("click", () => {
+        document.querySelectorAll(".filter-item").forEach(i => i.classList.remove("active"));
+        item.classList.add("active");
+        activeFilter = item.dataset.filter;
+        renderOrders();
+      });
+    });
+
+    searchInput.addEventListener("input", renderOrders);
+
+    function auditOrder(order) {
+      let deficitCount = 0;
+      let excessCount = 0;
+      let details = [];
+
+      order.items.forEach(it => {
+        const required = Number(it.quantity) || 0;
+        const pallets = it.pallets || [];
+        const allocated = pallets.reduce((sum, p) => sum + (Number(p.quantity) || 0), 0);
+        const diff = allocated - required;
+
+        if (diff < 0) {
+          deficitCount += Math.abs(diff);
+          details.push({ item: it.name, type: "deficit", count: Math.abs(diff), unit: it.packageType });
+        } else if (diff > 0) {
+          excessCount += diff;
+          details.push({ item: it.name, type: "excess", count: diff, unit: it.packageType });
+        }
+      });
+
+      return { deficitCount, excessCount, details, isApproved: deficitCount === 0 && excessCount === 0 };
+    }
+
+    function renderOrders() {
+      const q = searchInput.value.toLowerCase().trim();
+      ordersList.innerHTML = "";
+
+      const filtered = orders.filter(ord => {
+        const matchSearch = ord.client.toLowerCase().includes(q) || 
+          ord.items.some(i => i.name.toLowerCase().includes(q));
+
+        if (!matchSearch) return false;
+
+        const audit = auditOrder(ord);
+        if (activeFilter === "step1") return ord.currentStep === 1;
+        if (activeFilter === "step2") return ord.currentStep === 2;
+        if (activeFilter === "step3") return ord.currentStep === 3 && audit.isApproved;
+        if (activeFilter === "deficit") return audit.deficitCount > 0;
+        if (activeFilter === "excess") return audit.excessCount > 0;
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        ordersList.innerHTML = '<div class="empty-state">Nenhum pedido encontrado.</div>';
+        return;
+      }
+
+      filtered.forEach(ord => {
+        const audit = auditOrder(ord);
+        const card = document.createElement("div");
+        card.className = "order-card";
+        
+        let statusBadgeHtml = "";
+        if (audit.deficitCount > 0) {
+          statusBadgeHtml = `<div class="status-badge danger">⚠️ Faltam ${audit.deficitCount} volume(s) para completar</div>`;
+        } else if (audit.excessCount > 0) {
+          statusBadgeHtml = `<div class="status-badge warning">⚠️ Quantidade excessiva (+${audit.excessCount})</div>`;
+        } else {
+          statusBadgeHtml = `<div class="status-badge success">✓ Pedido aprovado e liberado</div>`;
+        }
+
+        card.innerHTML = `
+          <div class="card-top">
+            <div class="card-client">${ord.client || "Sem Nome"}</div>
+            <div class="card-date">Retirada: ${ord.pickupDate ? ord.pickupDate.split("-").reverse().join("/") : "--/--/----"}</div>
+          </div>
+          <div class="card-timeline">
+            <div class="tl-step ${ord.currentStep >= 1 ? (ord.currentStep > 1 ? 'completed' : 'current') : ''}">
+              <div class="tl-node">1</div>
+              <div class="tl-label">Andamento</div>
+            </div>
+            <div class="tl-step ${ord.currentStep >= 2 ? (ord.currentStep > 2 ? 'completed' : 'current') : ''}">
+              <div class="tl-node">2</div>
+              <div class="tl-label">Separação</div>
+            </div>
+            <div class="tl-step ${ord.currentStep === 3 ? 'completed' : ''}">
+              <div class="tl-node">3</div>
+              <div class="tl-label">Conferido</div>
+            </div>
+          </div>
+          ${statusBadgeHtml}
+        `;
+
+        card.addEventListener("click", () => openOrder(ord.id, ord.currentStep));
+        ordersList.appendChild(card);
+      });
+    }
+
+    function openOrder(id = null, forceStep = 1) {
+      currentEditingOrderId = id;
+      currentStep = forceStep;
+      selectedItemIndexForPallet = null;
+
+      document.getElementById("palletBoxForm").style.display = "none";
+      document.getElementById("btnDeleteCurrentOrder").style.display = id ? "block" : "none";
+      btnDownloadOrderPdf.style.display = id ? "inline-block" : "none";
+
+      if (id) {
+        const ord = orders.find(o => o.id === id);
+        document.getElementById("modalTitle").textContent = "Editar Pedido";
+        document.getElementById("orderClient").value = ord.client;
+        document.getElementById("orderDate").value = ord.pickupDate;
+        renderProductRows(ord.items);
+      } else {
+        document.getElementById("modalTitle").textContent = "Novo Pedido";
+        document.getElementById("orderClient").value = "";
+        document.getElementById("orderDate").value = "";
+        renderProductRows([{ name: "", variation: "", packageType: "Fardo", quantity: "" }]);
+      }
+
+      setStep(currentStep);
+      orderModal.classList.add("active");
+    }
+
+    function setStep(step) {
+      currentStep = step;
+      
+      document.getElementById("viewStep1").style.display = step === 1 ? "block" : "none";
+      document.getElementById("viewStep2").style.display = step === 2 ? "block" : "none";
+      document.getElementById("viewStep3").style.display = step === 3 ? "block" : "none";
+
+      [1, 2, 3].forEach(s => {
+        const node = document.getElementById("stepNode" + s);
+        node.className = "tl-step " + (step === s ? "current" : (step > s ? "completed" : ""));
+      });
+
+      document.getElementById("btnFooterPrev").textContent = step === 1 ? "Cancelar" : "Voltar";
+      document.getElementById("btnFooterNext").textContent = step === 3 ? "Concluir" : "Avançar";
+
+      if (step === 2) renderSeparationStep();
+      if (step === 3) renderAuditStep();
+    }
+
+    [1, 2, 3].forEach(s => {
+      document.getElementById("stepNode" + s).addEventListener("click", () => {
+        saveCurrentStateInMemory();
+        setStep(s);
+      });
+    });
+
+    btnOpenNewOrder.addEventListener("click", () => openOrder());
+    btnCloseModal.addEventListener("click", () => orderModal.classList.remove("active"));
+
+    const productsContainer = document.getElementById("productsContainer");
+
+    function renderProductRows(items) {
+      productsContainer.innerHTML = "";
+      items.forEach((item, index) => {
+        const div = document.createElement("div");
+        div.className = "item-card-edit";
+        div.innerHTML = `
+          ${items.length > 1 ? `<button type="button" class="btn-remove-item" onclick="removeProductRow(${index})">Remover</button>` : ""}
+          <div class="form-group" style="margin-bottom: 8px;">
+            <label>Produto</label>
+            <input type="text" class="inp-prod-name" value="${item.name || ''}" placeholder="Ex: Leite Integral">
+          </div>
+          <div class="form-group" style="margin-bottom: 8px;">
+            <label>Variação (Opcional)</label>
+            <input type="text" class="inp-prod-var" value="${item.variation || ''}" placeholder="Ex: Caixa 12x1L">
+          </div>
+          <div class="form-row">
+            <div class="form-group" style="flex: 1; margin-bottom: 0;">
+              <label>Embalagem</label>
+              <select class="inp-prod-pkg">
+                <option value="Fardo" ${item.packageType === 'Fardo' ? 'selected' : ''}>Fardo</option>
+                <option value="Unidade" ${item.packageType === 'Unidade' ? 'selected' : ''}>Unidade</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex: 1; margin-bottom: 0;">
+              <label>Quantidade</label>
+              <input type="number" class="inp-prod-qty" value="${item.quantity || ''}" placeholder="0">
+            </div>
+          </div>
+        `;
+        productsContainer.appendChild(div);
+      });
+    }
+
+    document.getElementById("btnAddProductRow").addEventListener("click", () => {
+      saveCurrentStateInMemory();
+      const ord = getCurrentOrderObject();
+      ord.items.push({ name: "", variation: "", packageType: "Fardo", quantity: "", pallets: [] });
+      renderProductRows(ord.items);
+    });
+
+    window.removeProductRow = function(index) {
+      saveCurrentStateInMemory();
+      const ord = getCurrentOrderObject();
+      ord.items.splice(index, 1);
+      renderProductRows(ord.items);
+    };
+
+    function saveCurrentStateInMemory() {
+      const client = document.getElementById("orderClient").value;
+      const pickupDate = document.getElementById("orderDate").value;
+      
+      const cards = productsContainer.querySelectorAll(".item-card-edit");
+      const items = [];
+      cards.forEach((card, idx) => {
+        const name = card.querySelector(".inp-prod-name").value;
+        const variation = card.querySelector(".inp-prod-var").value;
+        const packageType = card.querySelector(".inp-prod-pkg").value;
+        const quantity = card.querySelector(".inp-prod-qty").value;
+        
+        let existingPallets = [];
+        if (currentEditingOrderId) {
+          const orig = orders.find(o => o.id === currentEditingOrderId);
+          if (orig && orig.items[idx]) existingPallets = orig.items[idx].pallets || [];
+        }
+
+        items.push({ name, variation, packageType, quantity, pallets: existingPallets });
+      });
+
+      if (!currentEditingOrderId) {
+        currentEditingOrderId = "ord_" + Date.now();
+        orders.unshift({ id: currentEditingOrderId, client, pickupDate, items, currentStep });
+      } else {
+        const ord = orders.find(o => o.id === currentEditingOrderId);
+        if (ord) {
+          ord.client = client;
+          ord.pickupDate = pickupDate;
+          ord.items = items;
+          ord.currentStep = currentStep;
+        }
+      }
+      localStorage.setItem(StorageKey, JSON.stringify(orders));
+    }
+
+    function getCurrentOrderObject() {
+      return orders.find(o => o.id === currentEditingOrderId);
+    }
+
+    const palLocation = document.getElementById("palLocation");
+    const groupExtraCondition = document.getElementById("groupExtraCondition");
+    const palExtraCondition = document.getElementById("palExtraCondition");
+
+    palLocation.addEventListener("change", () => {
+      const val = palLocation.value;
+      palExtraCondition.innerHTML = '<option value="" disabled selected>Selecione a condição</option>';
+
+      if (val.startsWith("Corredor")) {
+        groupExtraCondition.style.display = "block";
+        palExtraCondition.innerHTML += `
+          <option value="Superior">Superior</option>
+          <option value="Inferior">Inferior</option>
+        `;
+      } else if (val === "Depósito") {
+        groupExtraCondition.style.display = "block";
+        const setores = ["Líquida", "Seca Salgada", "Seca Doce", "Perfumaria", "DPH", "Bazar"];
+        setores.forEach(s => {
+          palExtraCondition.innerHTML += `<option value="${s}">${s}</option>`;
+        });
+      } else {
+        groupExtraCondition.style.display = "none";
+      }
+    });
+
+    function renderSeparationStep() {
+      const ord = getCurrentOrderObject();
+      const container = document.getElementById("separationItemsList");
+      container.innerHTML = "";
+
+      ord.items.forEach((item, index) => {
+        const pallets = item.pallets || [];
+        const allocated = pallets.reduce((sum, p) => sum + (Number(p.quantity) || 0), 0);
+        const diff = allocated - Number(item.quantity);
+
+        const card = document.createElement("div");
+        card.className = "item-card-edit";
+        card.innerHTML = `
+          <div style="font-weight: 700; font-size: 14px;">${item.name || 'Produto sem nome'}</div>
+          <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">
+            Solicitado: ${item.quantity} ${item.packageType}(s) | Alocado: ${allocated}
+          </div>
+          ${diff < 0 ? `<div style="color: var(--danger); font-size: 11px; font-weight:600;">Faltam ${Math.abs(diff)} ${item.packageType}(s)</div>` : ''}
+          ${diff > 0 ? `<div style="color: var(--warning); font-size: 11px; font-weight:600;">Excesso de ${diff} ${item.packageType}(s)</div>` : ''}
+
+          <div style="margin-top: 8px;">
+            ${pallets.map((p, pIdx) => `
+              <div class="pallet-tag">
+                <div class="pallet-tag-info">
+                  📍 <b>${p.location}</b> ${p.extra ? `(${p.extra})` : ''} <br>
+                  📦 <b>${p.shelf}</b>: ${p.quantity} vol.
+                </div>
+                <div class="pallet-actions">
+                  <button type="button" class="btn-pdf-mini" title="Baixar PDF deste palete" onclick="downloadSinglePalletPdf(${index}, ${pIdx})">PDF</button>
+                  <button type="button" class="btn-del-tag" onclick="removePallet(${index}, ${pIdx})">✕</button>
+                </div>
+              </div>
+            `).join("")}
+          </div>
+
+          <button type="button" style="margin-top: 8px; background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 12px; font-weight: 600; color: var(--primary); width: 100%; cursor: pointer;" onclick="openAddPallet(${index})">
+            + Adicionar Palete no Corredor
+          </button>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    window.openAddPallet = function(itemIdx) {
+      selectedItemIndexForPallet = itemIdx;
+      const ord = getCurrentOrderObject();
+      const item = ord.items[itemIdx];
+
+      document.getElementById("palletTargetItemName").textContent = `Alocar: ${item.name} (${item.packageType})`;
+      document.getElementById("palShelf").selectedIndex = 0;
+      document.getElementById("palLocation").selectedIndex = 0;
+      document.getElementById("palQty").value = "";
+      groupExtraCondition.style.display = "none";
+
+      const box = document.getElementById("palletBoxForm");
+      box.style.display = "block";
+      box.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    document.getElementById("btnCancelPallet").addEventListener("click", () => {
+      document.getElementById("palletBoxForm").style.display = "none";
+    });
+
+    document.getElementById("btnConfirmAddPallet").addEventListener("click", () => {
+      const shelf = document.getElementById("palShelf").value;
+      const location = document.getElementById("palLocation").value;
+      const extra = palExtraCondition.value;
+      const qty = document.getElementById("palQty").value;
+
+      if (!shelf || !location || !qty || Number(qty) <= 0) {
+        alert("Preencha todos os campos do palete com valores válidos.");
+        return;
+      }
+
+      if (groupExtraCondition.style.display !== "none" && !extra) {
+        alert("Selecione a condição correspondente (superior/inferior ou setor).");
+        return;
+      }
+
+      const ord = getCurrentOrderObject();
+      if (!ord.items[selectedItemIndexForPallet].pallets) {
+        ord.items[selectedItemIndexForPallet].pallets = [];
+      }
+
+      ord.items[selectedItemIndexForPallet].pallets.push({
+        shelf,
+        location,
+        extra: groupExtraCondition.style.display !== "none" ? extra : null,
+        quantity: Number(qty)
+      });
+
+      localStorage.setItem(StorageKey, JSON.stringify(orders));
+      document.getElementById("palletBoxForm").style.display = "none";
+      renderSeparationStep();
+    });
+
+    window.removePallet = function(itemIdx, palletIdx) {
+      const ord = getCurrentOrderObject();
+      ord.items[itemIdx].pallets.splice(palletIdx, 1);
+      localStorage.setItem(StorageKey, JSON.stringify(orders));
+      renderSeparationStep();
+    };
+
+    function renderAuditStep() {
+      const ord = getCurrentOrderObject();
+      const audit = auditOrder(ord);
+
+      const statusBox = document.getElementById("auditStatusResult");
+      const breakdownBox = document.getElementById("auditItemsBreakdown");
+
+      if (audit.isApproved) {
+        statusBox.innerHTML = `
+          <div class="status-badge success" style="padding: 12px; font-size: 14px;">
+            ✓ Pedido Concluído: Quantidades 100% conferidas e liberadas.
+          </div>
+        `;
+      } else {
+        statusBox.innerHTML = `
+          <div class="status-badge danger" style="padding: 12px; font-size: 14px;">
+            ⚠️ Divergência na Separação: O pedido possui itens pendentes ou em excesso.
+          </div>
+        `;
+      }
+
+      breakdownBox.innerHTML = audit.details.map(d => `
+        <div style="padding: 8px 12px; background: var(--surface-subtle); border-radius: 8px; margin-bottom: 6px; font-size: 13px;">
+          ${d.type === 'deficit' ? '❌ Falta' : '⚠️ Excesso'}: <b>${d.count} ${d.unit}(s)</b> de ${d.item}
+        </div>
+      `).join("");
+    }
+
+    document.getElementById("btnFooterPrev").addEventListener("click", () => {
+      if (currentStep === 1) {
+        orderModal.classList.remove("active");
+      } else {
+        setStep(currentStep - 1);
+      }
+    });
+
+    document.getElementById("btnFooterNext").addEventListener("click", () => {
+      saveCurrentStateInMemory();
+      if (currentStep < 3) {
+        setStep(currentStep + 1);
+      } else {
+        const ord = getCurrentOrderObject();
+        ord.currentStep = 3;
+        localStorage.setItem(StorageKey, JSON.stringify(orders));
+        orderModal.classList.remove("active");
+        renderOrders();
+      }
+    });
+
+    document.getElementById("btnDeleteCurrentOrder").addEventListener("click", () => {
+      if (confirm("Deseja realmente excluir este pedido?")) {
+        orders = orders.filter(o => o.id !== currentEditingOrderId);
+        localStorage.setItem(StorageKey, JSON.stringify(orders));
+        orderModal.classList.remove("active");
+        renderOrders();
+      }
+    });
+
+    // ==========================================
+    // MÓDULO DE GERAÇÃO DE PDFS (jsPDF)
+    // ==========================================
+
+    // 1. PDF Individual por Palete (Etiqueta Operacional de Separação)
+    window.downloadSinglePalletPdf = function(itemIdx, palletIdx) {
+      const { jsPDF } = window.jspdf;
+      const ord = getCurrentOrderObject();
+      const item = ord.items[itemIdx];
+      const pal = item.pallets[palletIdx];
+
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [100, 150] }); // Formato etiqueta 10x15cm
+
+      // Cabeçalho
+      doc.setFillColor(234, 88, 12); // Laranja avermelhado
+      doc.rect(0, 0, 100, 22, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.text("TELEVENDAS FAST", 50, 11, { align: "center" });
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.text("FICHA DE SEPARAÇÃO DE PALETE", 50, 17, { align: "center" });
+
+      // Dados do Pedido
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.text("Cliente:", 8, 32);
+      doc.setFont("helvetica", "normal");
+      doc.text(String(ord.client || "Não informado"), 25, 32);
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Retirada:", 8, 40);
+      doc.setFont("helvetica", "normal");
+      const dataFmt = ord.pickupDate ? ord.pickupDate.split("-").reverse().join("/") : "--/--/----";
+      doc.text(dataFmt, 27, 40);
+
+      // Linha Divisória
+      doc.setDrawColor(226, 232, 240);
+      doc.line(8, 46, 92, 46);
+
+      // Produto e Quantidade do Palete
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text(String(item.name || "Produto").toUpperCase(), 50, 56, { align: "center" });
+
+      if (item.variation) {
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "italic");
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Var: ${item.variation}`, 50, 62, { align: "center" });
+      }
+
+      // Caixa Destacada de Quantidade
+      doc.setFillColor(241, 245, 249);
+      doc.roundedRect(10, 68, 80, 24, 3, 3, "F");
+      doc.setTextColor(234, 88, 12);
+      doc.setFontSize(18);
+      doc.setFont("helvetica", "bold");
+      doc.text(`${pal.quantity} ${item.packageType.toUpperCase()}(S)`, 50, 81, { align: "center" });
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Total solicitado no pedido: ${item.quantity} ${item.packageType}(s)`, 50, 87, { align: "center" });
+
+      // Localização e Prateleira
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.text("LOCALIZAÇÃO NO ESTOQUE", 50, 102, { align: "center" });
+
+      doc.setFontSize(10);
+      doc.text("Local:", 12, 114);
+      doc.setFont("helvetica", "normal");
+      const localStr = pal.extra ? `${pal.location} (${pal.extra})` : pal.location;
+      doc.text(localStr, 35, 114);
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Prateleira:", 12, 124);
+      doc.setFont("helvetica", "normal");
+      doc.text(pal.shelf, 35, 124);
+
+      // Rodapé da Ficha
+      doc.setFontSize(7);
+      doc.setTextColor(148, 163, 184);
+      doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, 50, 142, { align: "center" });
+
+      const safeName = (item.name || "item").replace(/[^a-zA-Z0-9]/g, "_");
+      doc.save(`Palete_${safeName}_${pal.location.replace(/\s+/g, '_')}.pdf`);
+    };
+
+    // 2. PDF Completo do Pedido Geral
+    btnDownloadOrderPdf.addEventListener("click", () => {
+      const { jsPDF } = window.jspdf;
+      const ord = getCurrentOrderObject();
+      const audit = auditOrder(ord);
+
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+      // Topo
+      doc.setFillColor(234, 88, 12);
+      doc.rect(0, 0, 210, 24, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(16);
+      doc.setFont("helvetica", "bold");
+      doc.text("TELEVENDAS FAST - RELATÓRIO DO PEDIDO", 105, 15, { align: "center" });
+
+      // Dados do Pedido
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.text("Cliente:", 14, 34);
+      doc.setFont("helvetica", "normal");
+      doc.text(String(ord.client || "Não informado"), 32, 34);
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Data de Retirada:", 14, 42);
+      doc.setFont("helvetica", "normal");
+      const dataFmt = ord.pickupDate ? ord.pickupDate.split("-").reverse().join("/") : "--/--/----";
+      doc.text(dataFmt, 48, 42);
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Status da Auditoria:", 14, 50);
+      doc.setFont("helvetica", "normal");
+      if (audit.isApproved) {
+        doc.setTextColor(22, 163, 74);
+        doc.text("Aprovado e Liberado (100% Separado)", 54, 50);
+      } else {
+        doc.setTextColor(220, 38, 38);
+        doc.text(`Divergente (Falta: ${audit.deficitCount} vol / Excesso: ${audit.excessCount} vol)`, 54, 50);
+      }
+
+      doc.setDrawColor(226, 232, 240);
+      doc.line(14, 56, 196, 56);
+
+      // Tabela de Produtos e Paletes
+      let currentY = 66;
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text("ITENS E LOCALIZAÇÕES DE SEPARAÇÃO", 14, currentY);
+      currentY += 8;
+
+      ord.items.forEach((it, i) => {
+        if (currentY > 260) {
+          doc.addPage();
+          currentY = 20;
+        }
+
+        const allocated = (it.pallets || []).reduce((sum, p) => sum + (Number(p.quantity) || 0), 0);
+        
+        doc.setFillColor(241, 245, 249);
+        doc.rect(14, currentY, 182, 8, "F");
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(15, 23, 42);
+        doc.text(`${i + 1}. ${it.name} ${it.variation ? `(${it.variation})` : ''}`, 16, currentY + 5.5);
+        doc.text(`Solicitado: ${it.quantity} ${it.packageType}(s) | Alocado: ${allocated}`, 194, currentY + 5.5, { align: "right" });
+        currentY += 12;
+
+        if (!it.pallets || it.pallets.length === 0) {
+          doc.setFontSize(9);
+          doc.setFont("helvetica", "italic");
+          doc.setTextColor(100, 116, 139);
+          doc.text("Nenhum palete alocado para este item.", 20, currentY);
+          currentY += 8;
+        } else {
+          it.pallets.forEach(pal => {
+            doc.setFontSize(9);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(15, 23, 42);
+            const extraStr = pal.extra ? `(${pal.extra})` : '';
+            doc.text(`• Palete: ${pal.quantity} vol. | Posição: ${pal.shelf} | Local: ${pal.location} ${extraStr}`, 20, currentY);
+            currentY += 6;
+          });
+          currentY += 2;
+        }
+      });
+
+      const safeClient = (ord.client || "pedido").replace(/[^a-zA-Z0-9]/g, "_");
+      doc.save(`Pedido_${safeClient}.pdf`);
+    });
+
+    renderOrders();
+  </script>
+</body>
+</html>
